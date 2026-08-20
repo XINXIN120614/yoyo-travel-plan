@@ -141,6 +141,7 @@
     .bubble-wrap{display:flex;width:100%;}
     .bubble-wrap.right{justify-content:flex-end;}
     .bubble-wrap.left{justify-content:flex-start;}
+    .bubble-avatar{flex:0 0 auto;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-right:6px;align-self:flex-end;background:rgba(122,155,168,.18);color:var(--primary);}
     .bubble{max-width:78%;padding:12px 16px;border-radius:20px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 2px 8px rgba(0,0,0,.06);}
     .bubble.user{background:rgba(122,155,168,.85);color:#fff;border-bottom-right-radius:6px;}
     .bubble.ai{background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.6);color:var(--text);border-bottom-left-radius:6px;}
@@ -158,7 +159,11 @@
     .ex-card{background:var(--surface);border-radius:var(--radius-lg);padding:20px 18px;margin:6px 0 14px;border:1px solid var(--border);box-shadow:0 2px 10px rgba(0,0,0,.04);color:var(--text);}
     .ex-label{font-size:13px;color:var(--text-secondary);margin-bottom:2px;}
     .ex-divider{height:1px;background:var(--divider);margin:14px 0 0;}
-    .ex-cur{min-width:96px;justify-content:center;font-weight:600;flex:0 0 auto;}
+    .ex-row{display:flex;align-items:center;gap:8px;min-height:48px;}
+    .ex-row .ex-amount{flex:1 1 auto;min-width:0;height:48px;font-size:22px;font-weight:700;border:none;background:transparent;color:var(--text);outline:none;text-align:left;padding:0 4px;}
+    .ex-result{flex:1 1 auto;min-width:0;height:48px;font-size:22px;font-weight:700;color:var(--text);display:flex;align-items:center;text-align:left;padding:0 4px;}
+    .ex-cur{flex:0 0 auto;padding:0 12px;font-weight:600;font-size:17px;color:var(--primary);background:transparent;border:none;justify-content:center;min-width:54px;}
+    .ex-cur:active{opacity:.7;}
     .ex-rate-line{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#EAF1F4;border:1px solid #C9D8DD;border-radius:var(--radius-md);padding:10px 14px;margin-top:10px;font-size:13px;color:#1E2429;font-weight:500;}
     .ex-rate-line span{color:#1E2429;}
     #ex-tip{color:var(--text-secondary);}
@@ -306,13 +311,12 @@
       <div class="scroll">
         <div class="ex-card">
           <div class="ex-label">金额</div>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <input id="ex-amount" type="number" value="100" style="flex:1;height:56px;font-size:28px;font-weight:700;border:none;background:transparent;color:var(--text);outline:none;">
+          <div class="ex-row">
+            <input id="ex-amount" type="number" value="100" class="ex-amount">
             <div class="select ex-cur" id="ex-from" onclick="picker.openCurrency('ex-from')">USD</div>
           </div>
-          <div class="ex-divider"></div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px;">
-            <span style="font-size:26px;font-weight:700;color:var(--text);" id="ex-result">—</span>
+          <div class="ex-row">
+            <span class="ex-result" id="ex-result">—</span>
             <div class="select ex-cur" id="ex-to" onclick="picker.openCurrency('ex-to')">CNY</div>
           </div>
         </div>
@@ -343,7 +347,7 @@
       <div class="tab active" data-page="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span>首页</span></div>
       <div class="tab" data-page="plans"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg><span>计划</span></div>
       <div class="tab" data-page="newplan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg><span>新建</span></div>
-      <div class="tab" data-page="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3c-1.1 0-2.1-.2-3.1-.6L3 21l1.8-4.2A8.4 8.4 0 0 1 3.2 11.5C3.2 7 7 3.2 11.8 3.2s8.5 3.8 8.5 8.3z"/><path d="M9 10.5l1.8-3.5L15 7.2l-1.8 3.5z"/><circle cx="14.2" cy="13.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="9.8" cy="14.5" r="1.2" fill="currentColor" stroke="none"/></svg><span>悠悠</span></div>
+      <div class="tab" data-page="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="13" height="11" rx="3"/><rect x="2.5" y="9" width="1.5" height="4" rx="0.6"/><rect x="17" y="9" width="1.5" height="4" rx="0.6"/><circle cx="8" cy="11.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="13" cy="11.5" r="1.2" fill="currentColor" stroke="none"/><line x1="9" y1="20" x2="9" y2="18.5"/><line x1="12" y1="20" x2="12" y2="18.5"/><circle cx="10.5" cy="3.5" r="1" fill="none"/></svg><span>悠悠</span></div>
       <div class="tab" data-page="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg><span>个人</span></div>
     </nav>
 
@@ -952,13 +956,13 @@
     let all=Object.values(db.plans||{}).filter(p=>p&&p.id);
     // 当前用户关联的计划；若匹配不到（数据错乱/新注册），回退展示全部计划避免空白
     const mine=all.filter(p=>p.creator===db.currentUser||(Array.isArray(p.members)&&p.members.includes(db.currentUser)));
-    const plans=mine.length?mine:all;
-    const cities=new Set(plans.map(p=>p.destinationCity)).size;
-    const trips=plans.reduce((a,p)=>a+(p.itineraries?p.itineraries.reduce((b,d)=>b+d.nodes.length,0):0),0);
-    const checkins=plans.reduce((a,p)=>a+(p.attractions?p.attractions.filter(x=>x.checkin).length:0),0);
+    const shownPlans=mine.length?mine:all;
+    const cities=new Set(shownPlans.map(p=>p.destinationCity)).size;
+    const trips=shownPlans.reduce((a,p)=>a+(p.itineraries?p.itineraries.reduce((b,d)=>b+d.nodes.length,0):0),0);
+    const checkins=shownPlans.reduce((a,p)=>a+(p.attractions?p.attractions.filter(x=>x.checkin).length:0),0);
     $('#stat-cities').textContent=cities; $('#stat-trips').textContent=trips; $('#stat-checkins').textContent=checkins;
     const list=$('#plans-list'); list.innerHTML='';
-    const filtered=plans.filter(p=>filter==='all'||(filter==='upcoming'&&statusOf(p)==='待出行')||(filter==='past'&&statusOf(p)==='已出行')).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+    const filtered=shownPlans.filter(p=>filter==='all'||(filter==='upcoming'&&statusOf(p)==='待出行')||(filter==='past'&&statusOf(p)==='已出行')).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
     if(filtered.length===0){ list.innerHTML=empty('没有符合条件的计划'); return; }
     filtered.forEach(plan=>{
       const st=statusOf(plan);
@@ -1896,8 +1900,12 @@
     load(){ const u=db.currentUser; if(!db.chats[u])db.chats[u]=[]; this.render(); },
     render(){
       const box=$('#ai-chat'); box.innerHTML='';
+      const robotSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><rect x="4" y="6" width="13" height="11" rx="3"/><rect x="2.5" y="9" width="1.5" height="4" rx="0.6"/><rect x="17" y="9" width="1.5" height="4" rx="0.6"/><circle cx="8" cy="11.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="13" cy="11.5" r="1.2" fill="currentColor" stroke="none"/><line x1="9" y1="20" x2="9" y2="18.5"/><line x1="12" y1="20" x2="12" y2="18.5"/><circle cx="10.5" cy="3.5" r="1" fill="none"/></svg>';
       (db.chats[db.currentUser]||[]).forEach(m=>{
         const wrap=document.createElement('div'); wrap.className='bubble-wrap '+(m.role==='user'?'right':'left');
+        if(m.role!=='user'){
+          const av=document.createElement('div'); av.className='bubble-avatar ai-avatar'; av.innerHTML=robotSvg; wrap.appendChild(av);
+        }
         const b=document.createElement('div'); b.className='bubble '+(m.role==='user'?'user':'ai');
         b.textContent=m.text; wrap.appendChild(b); box.appendChild(wrap);
       });
