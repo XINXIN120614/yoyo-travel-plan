@@ -57,15 +57,23 @@
     .bottom-tab .tab.active{color:var(--primary);}
     .bottom-tab .tab svg{width:24px;height:24px;}
     .bottom-sheet{position:absolute;left:0;right:0;bottom:0;max-height:82vh;background:var(--surface-solid);border-radius:var(--radius-xl) var(--radius-xl) 0 0;transform:translateY(100%);transition:transform .25s cubic-bezier(.25,1,.5,1);z-index:200;display:flex;flex-direction:column;border:1px solid var(--border);}
+    :root[data-theme="light"] .bottom-sheet{background:#FFFFFF;}
     .bottom-sheet.show{transform:translateY(0);}
     .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.35);opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;}
     .overlay.show{opacity:1;pointer-events:auto;}
     .modal-stack{position:absolute;inset:0;pointer-events:none;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;}
-    .modal{pointer-events:auto;background:var(--surface);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-radius:var(--radius-xl);border:1px solid var(--border);width:100%;max-width:420px;max-height:80vh;display:flex;flex-direction:column;transform:scale(0.92);opacity:0;transition:transform .2s cubic-bezier(.34,1.56,.64,1),opacity .2s;box-shadow:var(--shadow-soft);}
+    .modal{pointer-events:auto;background:var(--surface-solid);border-radius:var(--radius-xl);border:1px solid var(--border);width:100%;max-width:420px;max-height:80vh;display:flex;flex-direction:column;transform:scale(0.92);opacity:0;transition:transform .2s cubic-bezier(.34,1.56,.64,1),opacity .2s;box-shadow:var(--shadow-soft);}
+    :root[data-theme="light"] .modal{background:#FFFFFF;}
     .modal.show{transform:scale(1);opacity:1;}
     .modal-head{padding:18px 20px 8px;font-size:17px;font-weight:600;display:flex;align-items:center;justify-content:space-between;}
     .modal-body{padding:8px 20px 16px;overflow-y:auto;}
     .modal-foot{padding:12px 20px 18px;display:flex;gap:10px;}
+    @media (max-width:360px){
+      .modal-head{padding:16px 16px 6px;font-size:16px;}
+      .modal-body{padding:6px 16px 12px;}
+      .modal-foot{padding:10px 16px 14px;gap:8px;}
+      .modal{max-height:85vh;}
+    }
     .field{margin-bottom:14px;}
     .field label{display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px;}
     .field input,.field textarea,.field select{width:100%;height:44px;border-radius:var(--radius-md);border:1px solid var(--divider);background:var(--surface-solid);color:var(--text);padding:0 12px;font-size:15px;}
@@ -1638,6 +1646,23 @@
 
   /* ============ 分享 ============ */
   const share={
+    async pushShared(p){
+      if(!sb)return;
+      try{
+        const data=JSON.parse(JSON.stringify(p));
+        const {error}=await sb.from('yy_shared_plans').upsert({share_code:p.shareCode,data,expires_at:new Date(p.shareExpiry).toISOString(),updated_at:new Date().toISOString()});
+        if(error)console.warn('pushShared err',error.message);
+      }catch(e){ console.warn('pushShared',e.message); }
+    },
+    async pullShared(code){
+      if(!sb)return null;
+      try{
+        const {data,error}=await sb.from('yy_shared_plans').select('data,expires_at').eq('share_code',code).limit(1).maybeSingle();
+        if(error||!data)return null;
+        if(new Date(data.expires_at).getTime()<Date.now())return null;
+        return data.data||null;
+      }catch(e){ return null; }
+    },
     show(planId){
       const p=store.plan(planId);
       if(!p.shareCode||Date.now()>p.shareExpiry){
@@ -1645,6 +1670,7 @@
         p.shareEditLink=location.origin+location.pathname+'#join='+p.shareCode; p.shareViewLink=p.shareEditLink+'&view=1';
         store.setPlan(p);
       }
+      share.pushShared(p);
       const rem=Math.max(0,Math.ceil((p.shareExpiry-Date.now())/3600000));
       const typeLabel={attr:'景点',hotel:'酒店',transport:'出行',photo:'拍照'};
       let plain=`【计划】${p.name}\n目的地：${p.destinationCity||'-'}\n时间：${p.days}天${p.nights}夜 · ${p.startDate} 至 ${p.endDate}\n`;
@@ -1676,10 +1702,13 @@
       </div><div class="modal-foot"><button class="btn btn-primary btn-block" onclick="modal.closeTop()">完成</button></div>`);
     },
     copy(text){ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(()=>toast('已复制'),()=>toast('复制失败'));}else{toast('已复制分享内容');} },
-    join(){
+    async join(){
       const code=$('#join-code').value.trim().toUpperCase(); if(!code){toast('请输入分享码');return;}
-      const p=Object.values(db.plans).find(x=>x.shareCode===code&&Date.now()<x.shareExpiry);
-      if(!p){toast('分享码无效或已过期（24小时有效）');return;}
+      const btn=$('#modal-stack .btn-primary'); if(btn)btn.disabled=true;
+      let p=Object.values(db.plans).find(x=>x.shareCode===code&&Date.now()<x.shareExpiry);
+      if(!p){ const shared=await share.pullShared(code); if(shared&&shared.id){ p=shared; p.id=p.id||uid(); } }
+      if(!p){ toast('分享码无效或已过期（24小时有效）'); if(btn)btn.disabled=false; return; }
+      if(!p.members||!Array.isArray(p.members))p.members=[];
       if(!p.members.includes(db.currentUser))p.members.push(db.currentUser);
       store.setPlan(p); store.addLog(p.id,db.currentUser,'通过分享码加入协作'); modal.closeTop(); toast('已加入协作计划'); router.go('detail',{planId:p.id});
     }
@@ -1888,7 +1917,7 @@
     attachDetailSwipe();
     // URL 分享码自动唤起加入
     const h=location.hash.match(/join=([^&]+)/);
-    if(h){ const code=h[1].toUpperCase(); const p=Object.values(db.plans).find(x=>x.shareCode===code&&Date.now()<x.shareExpiry); if(p){ if(db.currentUser){ if(!p.members.includes(db.currentUser))p.members.push(db.currentUser); store.setPlan(p); router.go('detail',{planId:p.id}); } else { toast('请先登录后加入协作'); } } }
+    if(h){ const code=h[1].toUpperCase(); (async()=>{ let p=Object.values(db.plans).find(x=>x.shareCode===code&&Date.now()<x.shareExpiry); if(!p)p=await share.pullShared(code); if(p){ if(db.currentUser){ if(!p.members||!Array.isArray(p.members))p.members=[]; if(!p.members.includes(db.currentUser))p.members.push(db.currentUser); store.setPlan(p); router.go('detail',{planId:p.id}); } else { toast('请先登录后加入协作'); } } })(); }
   });
   </script>
 </body>
