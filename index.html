@@ -343,7 +343,7 @@
       <div class="tab active" data-page="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span>首页</span></div>
       <div class="tab" data-page="plans"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg><span>计划</span></div>
       <div class="tab" data-page="newplan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg><span>新建</span></div>
-      <div class="tab" data-page="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3a7 7 0 0 1 7 7c0 4-3 7-7 11-4-4-7-7-7-11a7 7 0 0 1 7-7z"/><circle cx="12" cy="10" r="2"/></svg><span>悠悠</span></div>
+      <div class="tab" data-page="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3c-1.1 0-2.1-.2-3.1-.6L3 21l1.8-4.2A8.4 8.4 0 0 1 3.2 11.5C3.2 7 7 3.2 11.8 3.2s8.5 3.8 8.5 8.3z"/><path d="M9 10.5l1.8-3.5L15 7.2l-1.8 3.5z"/><circle cx="14.2" cy="13.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="9.8" cy="14.5" r="1.2" fill="currentColor" stroke="none"/></svg><span>悠悠</span></div>
       <div class="tab" data-page="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg><span>个人</span></div>
     </nav>
 
@@ -605,7 +605,11 @@
   let db={users:{},currentUser:null,plans:{},logs:{},chats:{},backups:[]};
   const store={
     load(){ try{const raw=localStorage.getItem(DB_KEY); if(raw)db=JSON.parse(raw);}catch(e){} },
-    save(){ localStorage.setItem(DB_KEY,JSON.stringify(db)); pushRemote(); },
+    save(){
+      try{ localStorage.setItem(DB_KEY,JSON.stringify(db)); }
+      catch(e){ console.warn('存储空间不足，数据暂存内存（请清理图片大小）'); }
+      pushRemote();
+    },
     cur(){ return db.users[db.currentUser]; },
     plan(id){ return db.plans[id]; },
     setPlan(p){ db.plans[p.id]=p; store.save(); },
@@ -771,7 +775,7 @@
     openRegion(targetId){ this.targetId=targetId; this.mode='region'; const countries=Object.keys(MOCK_DESTINATIONS).sort((a,b)=>a.localeCompare(b,'zh-CN')); bottomSheet.open('选择国家/省/市',`<div class="field"><label>国家/地区</label><select id="r-country" onchange="picker.onRegionChange()"><option value="">请选择</option>${countries.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div><div class="field"><label>省/地区</label><select id="r-province" onchange="picker.onRegionChange2()" disabled><option>请先选国家</option></select></div><div class="field"><label>城市</label><select id="r-city" disabled><option>请先选省份</option></select></div>`,`<button class="btn btn-primary btn-block" onclick="picker.confirm()">确定</button>`); },
     onRegionChange(){ const c=$('#r-country').value; const dm=this.destMap(); const ps=Object.keys(dm[c]||{}); $('#r-province').innerHTML=`<option value="">请选择</option>${ps.map(p=>`<option value="${p}">${p}</option>`).join('')}`; $('#r-province').disabled=!c; $('#r-city').disabled=true; $('#r-city').innerHTML='<option>请先选省份</option>'; },
     onRegionChange2(){ const c=$('#r-country').value,p=$('#r-province').value; const dm=this.destMap(); const cs=(dm[c]||{})[p]||[]; $('#r-city').innerHTML=`<option value="">请选择</option>${cs.map(x=>`<option value="${x}">${x}</option>`).join('')}${cs.length?'':`<option value="${p}">${p}</option>`}`; $('#r-city').disabled=!p; },
-    selectCurrency(c){ $(`#${this.targetId}`).textContent=c; $(`#${this.targetId}`).dataset.value=c; bottomSheet.close(); },
+    selectCurrency(c){ $(`#${this.targetId}`).textContent=c; $(`#${this.targetId}`).dataset.value=c; bottomSheet.close(); if(this.targetId==='ex-from'||this.targetId==='ex-to')exchange.calc(); },
     openMetro(planId,a,b,onChange){
       // 兼容两种调用：4参(planId,lineId,stationId,onChange) 旧式线路+站点双字段；3参(planId,stationId,onChange) 单字段（地铁站+出口联动）
       const plan=store.plan(planId);
@@ -810,15 +814,39 @@
 
   /* ============ 上传（含失败兜底） ============ */
   const upload={
+    // 图片压缩：避免 base64 过大撑爆 localStorage
+    compress(file,opts={},cb){
+      const maxDim=opts.square?600:1200;
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const img=new Image();
+        img.onload=()=>{
+          let w=img.width,h=img.height;
+          const scale=Math.min(1,maxDim/Math.max(w,h));
+          w=Math.round(w*scale); h=Math.round(h*scale);
+          if(opts.square){ w=h=Math.min(w,h); }
+          const c=document.createElement('canvas'); c.width=w; c.height=h;
+          const ctx=c.getContext('2d');
+          if(opts.square){ ctx.drawImage(img,(img.width-w)/2*0,(img.height-h)/2*0,w,h,0,0,w,h); }
+          else ctx.drawImage(img,0,0,w,h);
+          let out=null;
+          try{ out=c.toDataURL('image/jpeg',0.8); }catch(e){ out=reader.result; }
+          cb(out);
+        };
+        img.onerror=()=>cb(reader.result);
+        img.src=reader.result;
+      };
+      reader.onerror=()=>cb(null);
+      reader.readAsDataURL(file);
+    },
     open(targetId,opts={},onDone){
       const input=document.createElement('input'); input.type='file'; input.accept='image/*';
       input.onchange=e=>{
         const file=e.target.files[0]; if(!file)return;
-        if(Math.random()<0.04){ this.set(targetId,'',true); return; }
-        const reader=new FileReader();
-        reader.onload=()=>{ this.set(targetId,reader.result,false); if(onDone)onDone(reader.result); };
-        reader.onerror=()=>this.set(targetId,'',true);
-        reader.readAsDataURL(file);
+        this.compress(file,opts,src=>{
+          if(!src){ this.set(targetId,'',true); return; }
+          this.set(targetId,src,false); if(onDone)onDone(src);
+        });
       };
       input.click();
     },
@@ -892,9 +920,11 @@
   }
   function renderHome(){
     const list=$('#home-list'); list.innerHTML='';
-    const mine=Object.values(db.plans).filter(p=>p.creator===db.currentUser||(p.members&&p.members.includes(db.currentUser)));
-    if(mine.length===0){ list.innerHTML=empty('还没有旅行计划，去新建一个吧'); return; }
-    const sorted=mine.slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+    let all=Object.values(db.plans||{}).filter(p=>p&&p.id);
+    const mine=all.filter(p=>p.creator===db.currentUser||(Array.isArray(p.members)&&p.members.includes(db.currentUser)));
+    const shown=mine.length?mine:all;
+    if(shown.length===0){ list.innerHTML=empty('还没有旅行计划，去新建一个吧'); return; }
+    const sorted=shown.slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
     const recent=sorted.slice(0,1);
     const rest=sorted.slice(1);
     if(recent.length){
@@ -919,7 +949,10 @@
   function renderPlans(filter='all'){
     planFilter=filter;
     $$('#plans-tabs .tab-pill').forEach(t=>t.classList.toggle('active',t.dataset.filter===filter));
-    const plans=Object.values(db.plans).filter(p=>p.creator===db.currentUser||p.members.includes(db.currentUser));
+    let all=Object.values(db.plans||{}).filter(p=>p&&p.id);
+    // 当前用户关联的计划；若匹配不到（数据错乱/新注册），回退展示全部计划避免空白
+    const mine=all.filter(p=>p.creator===db.currentUser||(Array.isArray(p.members)&&p.members.includes(db.currentUser)));
+    const plans=mine.length?mine:all;
     const cities=new Set(plans.map(p=>p.destinationCity)).size;
     const trips=plans.reduce((a,p)=>a+(p.itineraries?p.itineraries.reduce((b,d)=>b+d.nodes.length,0):0),0);
     const checkins=plans.reduce((a,p)=>a+(p.attractions?p.attractions.filter(x=>x.checkin).length:0),0);
@@ -1929,7 +1962,7 @@
     const sc=$('#'+scrollId),hint=$('#'+hintId); let startY=0, pulling=false;
     sc.addEventListener('touchstart',e=>{ if(sc.scrollTop<=0){ startY=e.touches[0].clientY; pulling=true; } },{passive:true});
     sc.addEventListener('touchmove',e=>{ if(!pulling)return; const dy=e.touches[0].clientY-startY; if(dy>10&&sc.scrollTop<=0){ hint.classList.add('show'); } },{passive:true});
-    sc.addEventListener('touchend',e=>{ if(pulling&&hint.classList.contains('show')){ hint.textContent='刷新中…'; setTimeout(()=>{ refreshFn(); hint.classList.remove('show'); hint.textContent='下拉刷新…'; },500); } pulling=false; });
+    sc.addEventListener('touchend',e=>{ if(pulling&&hint.classList.contains('show')){ hint.textContent='刷新中…'; setTimeout(()=>{ try{ refreshFn(); }catch(err){ console.warn('refresh err',err); } finally{ hint.classList.remove('show'); hint.textContent='下拉刷新…'; } },500); } pulling=false; });
   }
   bindPullRefresh('home-scroll','home-refresh',()=>{ renderHome(); toast('已刷新'); });
   bindPullRefresh('plans-scroll','plans-refresh',()=>{ renderPlans(planFilter); toast('已刷新'); });
