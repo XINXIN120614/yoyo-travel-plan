@@ -725,7 +725,11 @@
       const idx=this.stack.findIndex(x=>x.id===mid);
       if(idx>=0){ const t=this.stack.splice(idx,1)[0]; $('#'+t.id).remove(); if(this.stack.length===0)$('#overlay').classList.remove('show'); }
     },
-    closeAll(){ this.stack.slice().forEach(()=>this.closeTop()); }
+    closeAll(){ this.stack.slice().forEach(()=>this.closeTop()); },
+    confirm(msg,onOk){
+      this._onOk=onOk;
+      this.open(`<div class="modal-head">确认</div><div class="modal-body"><div style="padding:6px 2px;">${msg}</div></div><div class="modal-foot"><button class="btn btn-secondary" style="flex:1" onclick="modal.closeTop()">取消</button><button class="btn btn-primary" style="flex:1" onclick="modal._onOk();modal.closeTop()">确定</button></div>`);
+    }
   };
   const bottomSheet={
     open(title,body,foot=''){
@@ -925,12 +929,40 @@
     if(filtered.length===0){ list.innerHTML=empty('没有符合条件的计划'); return; }
     filtered.forEach(plan=>{
       const st=statusOf(plan);
-      const el=document.createElement('div'); el.className='card plan-card';
+      const el=document.createElement('div'); el.className='card plan-card plan-longpress';
       el.innerHTML=`<img class="plan-cover" src="${plan.cover||''}" onerror="this.style.display='none'"><div class="plan-info"><div class="plan-title">${plan.name}</div><div class="plan-meta">${plan.destinationCity} · ${st} · ${plan.startDate}</div></div><span class="tag ${st==='已出行'?'tag-secondary':'tag-primary'}">${st}</span>`;
       el.onclick=()=>router.go('detail',{planId:plan.id,tab:0});
+      plans.bindLongpress(el,plan.id);
       list.appendChild(el);
     });
   }
+  const plans={
+    openId:null,
+    bindLongpress(el,id){
+      let timer=null,moved=false,sx=0,sy=0;
+      const cancel=()=>{ if(timer){clearTimeout(timer);timer=null;} };
+      el.addEventListener('pointerdown',e=>{
+        moved=false; sx=e.clientX; sy=e.clientY;
+        timer=setTimeout(()=>{ timer=null; navigator.vibrate&&navigator.vibrate(20); plans.del(id); },600);
+      });
+      el.addEventListener('pointermove',e=>{
+        if(timer&&Math.hypot(e.clientX-sx,e.clientY-sy)>8){ moved=true; cancel(); }
+      });
+      el.addEventListener('pointerup',()=>cancel());
+      el.addEventListener('pointercancel',()=>cancel());
+      el.addEventListener('contextmenu',e=>e.preventDefault());
+    },
+    del(id){
+      const p=db.plans[id]; if(!p)return;
+      modal.confirm(`确定删除计划「${p.name}」吗？该操作不可恢复。`,()=>{
+        delete db.plans[id];
+        store.addLog(id||'global',db.currentUser,`删除计划「${p.name}」`);
+        store.save();
+        toast('已删除');
+        setTimeout(()=>renderPlans(planFilter),300);
+      });
+    }
+  };
   $('#plans-tabs').addEventListener('click',e=>{ const t=e.target.closest('.tab-pill'); if(t)renderPlans(t.dataset.filter); });
   $('#plans-add-btn').onclick=()=>{
     modal.open(`<div class="modal-head">加入协作计划</div><div class="modal-body"><div class="field"><label>输入他人分享码（24小时有效）</label><input id="join-code" placeholder="输入分享码"></div></div><div class="modal-foot"><button class="btn btn-secondary" style="flex:1" onclick="modal.closeTop()">取消</button><button class="btn btn-primary" style="flex:1" onclick="share.join()">绑定</button></div>`);
