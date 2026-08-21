@@ -949,8 +949,13 @@
 
   /* ============ 计划列表 ============ */
   let planFilter='all';
-  function renderPlans(filter='all'){
+  async function renderPlans(filter='all'){
     planFilter=filter;
+    // 进入计划列表时，异步拉取所有协作计划的最新数据（不阻塞展示）
+    if(sb&&db.currentUser){
+      const collabs=Object.values(db.plans||{}).filter(p=>p&&p.id&&p.shareCode&&Date.now()<p.shareExpiry);
+      Promise.all(collabs.map(p=>share.syncPlan(p.id))).then(()=>{ if(planFilter===filter)renderPlans(filter); });
+    }
     $$('#plans-tabs .tab-pill').forEach(t=>t.classList.toggle('active',t.dataset.filter===filter));
     let all=Object.values(db.plans||{}).filter(p=>p&&p.id);
     // 当前用户关联的计划；若匹配不到（数据错乱/新注册），回退展示全部计划避免空白
@@ -1007,7 +1012,18 @@
   /* ============ 计划详情 ============ */
   const detail={
     planId:null,tab:0,
-    load(pid,tab=0){ this.planId=pid; this.tab=tab; this.renderHeader(); this.renderTabs(); this.renderBody(); },
+    load(pid,tab=0){
+      this.planId=pid; this.tab=tab;
+      // 协作计划进入详情时先从云端拉取最新数据，保证所有成员内容一致
+      const p=store.plan(pid);
+      if(p&&p.shareCode&&Date.now()<p.shareExpiry){
+        share.syncPlan(pid).then(()=>{
+          if(detail.planId!==pid)return;
+          detail.renderHeader(); detail.renderTabs(); detail.renderBody();
+        });
+      }
+      this.renderHeader(); this.renderTabs(); this.renderBody();
+    },
     renderHeader(){
       const p=store.plan(this.planId);
       $('#detail-title').textContent='计划详情';
@@ -1734,18 +1750,34 @@
       if(!sb)return;
       try{
         const data=JSON.parse(JSON.stringify(p));
-        const {error}=await sb.from('yy_shared_plans').upsert({share_code:p.shareCode,data,expires_at:new Date(p.shareExpiry).toISOString(),updated_at:new Date().toISOString()});
+        const row={share_code:p.shareCode,data,expires_at:new Date(p.shareExpiry).toISOString(),updated_at:new Date().toISOString()};
+        let {error}=await sb.from('yy_shared_plans').upsert(row,{onConflict:'share_code'});
+        if(error){
+          // 表未建唯一索引：先删旧行再插入，保证单行、避免 pull 多行报错
+          await sb.from('yy_shared_plans').delete().eq('share_code',p.shareCode);
+          ({error}=await sb.from('yy_shared_plans').insert(row));
+        }
         if(error)console.warn('pushShared err',error.message);
       }catch(e){ console.warn('pushShared',e.message); }
     },
     async pullShared(code){
       if(!sb)return null;
       try{
-        const {data,error}=await sb.from('yy_shared_plans').select('data,expires_at').eq('share_code',code).limit(1).maybeSingle();
-        if(error||!data)return null;
-        if(new Date(data.expires_at).getTime()<Date.now())return null;
-        return data.data||null;
+        const {data,error}=await sb.from('yy_shared_plans').select('data,expires_at').eq('share_code',code).order('updated_at',{ascending:false}).limit(1);
+        if(error||!data||!data.length)return null;
+        const row=data[0];
+        if(new Date(row.expires_at).getTime()<Date.now())return null;
+        return row.data||null;
       }catch(e){ return null; }
+    },
+    // 打开协作计划详情时自动拉云端最新数据并覆盖本地（保证成员看到最新内容）
+    async syncPlan(pid){
+      const p=store.plan(pid);
+      if(!p||!p.shareCode||Date.now()>p.shareExpiry||!sb)return;
+      const shared=await this.pullShared(p.shareCode);
+      if(shared&&shared.id&&shared.id===p.id){
+        db.plans[pid]=shared; store.save();
+      }
     },
     show(planId){
       const p=store.plan(planId);
