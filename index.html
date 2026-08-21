@@ -1269,7 +1269,7 @@
       </div><div class="modal-foot"><button class="btn btn-secondary" style="flex:1" onclick="modal.closeTop()">取消</button><button class="btn btn-primary" style="flex:1" onclick="transport.save()">保存</button></div>`);
     },
     save(){
-      const p=store.plan(detail.planId); const type=$('#tr-type').dataset.value; const from=$('#tr-from').dataset.value; const to=$('#tr-to').dataset.value; const dt=$('#tr-dt').dataset.value; const at=$('#tr-at').dataset.value; const price=parseFloat($('#tr-price').value)||0; const round=$('#tr-round').dataset.value==='往返';
+      const p=store.plan(detail.planId); const type=$('#tr-type').dataset.value; const fromEl=$('#tr-from'),toEl=$('#tr-to'); const from=(fromEl.value||fromEl.dataset.value||'').trim(); const to=(toEl.value||toEl.dataset.value||'').trim(); const dt=$('#tr-dt').dataset.value; const at=$('#tr-at').dataset.value; const price=parseFloat($('#tr-price').value)||0; const round=$('#tr-round').dataset.value==='往返';
       if(!type||!from||!to){toast('请完善出行信息');return;}
       const t={id:uid(),type,departure:from,arrival:to,depTime:dt,arrTime:at,price,round,creator:db.currentUser};
       p.transports.push(t); store.setPlan(p);
@@ -1627,7 +1627,7 @@
     const list=$('#metro-list');
     p.metros.forEach(m=>{
       const el=document.createElement('div'); el.className='card list-item';
-      el.innerHTML=`<div style="flex:1"><div style="font-weight:500;">${m.line} · ${m.name}</div><div class="muted">出口：${(m.exits||[]).join(',')||'无'}</div></div>${canEdit&&!readonly?'<span class="delete-btn" onclick="event.stopPropagation();metro.del(\''+m.id+'\')">删除</span>':''}`;
+      el.innerHTML=`<div style="flex:1"><div style="font-weight:500;">${m.line} · ${m.name}</div><div class="muted">出口：${(m.exits||[]).join(',')||'无'}</div></div>${canEdit&&!readonly?`<span class="toggle-btn" onclick="event.stopPropagation();metro.edit('${m.id}')">编辑</span><span class="delete-btn" onclick="event.stopPropagation();metro.del('${m.id}')">删除</span>`:''}`;
       el.onclick=()=>metro.view(m);
       list.appendChild(el);
     });
@@ -1652,6 +1652,20 @@
     },
     toggleExit(v){ const cell=[...document.querySelectorAll('#mt-exits .exit-cell')].find(c=>c.dataset.v===v); if(cell)cell.classList.toggle('on'); },
     save(x,y){ const p=store.plan(detail.planId); const line=$('#mt-line').value.trim(); const name=$('#mt-name').value.trim(); const exits=[...document.querySelectorAll('#mt-exits .exit-cell.on')].map(c=>c.dataset.v); if(!line||!name){toast('请完善');return;} p.metros.push({id:uid(),line,name,exits,creator:db.currentUser,x:x,y:y}); store.setPlan(p); store.addLog(p.id,db.currentUser,`新增地铁站「${line} ${name}」`); modal.closeTop(); detail.renderBody(); },
+    edit(id){
+      const p=store.plan(detail.planId); const m=p.metros.find(x=>x.id===id); if(!m)return;
+      modal.open(`<div class="modal-head">编辑地铁站</div><div class="modal-body">
+        <div class="field"><label>地铁站名称</label><input id="mt-name" value="${m.name}"></div>
+        <div class="field"><label>地铁线路</label><input id="mt-line" value="${m.line}"></div>
+        <div class="field"><label>地铁出口（A/M，点格子多选，禁止手写）</label><div class="exit-grid" id="mt-exits">${EXITS.map(v=>`<div class="exit-cell ${(m.exits||[]).includes(v)?'on':''}" data-v="${v}" onclick="metro.toggleExit('${v}')">${v}</div>`).join('')}</div></div>
+      </div><div class="modal-foot"><button class="btn btn-secondary" style="flex:1" onclick="modal.closeTop()">取消</button><button class="btn btn-primary" style="flex:1" onclick="metro.saveEdit('${id}')">保存</button></div>`);
+    },
+    saveEdit(id){
+      const p=store.plan(detail.planId); const m=p.metros.find(x=>x.id===id); if(!m)return;
+      const line=$('#mt-line').value.trim(); const name=$('#mt-name').value.trim(); const exits=[...document.querySelectorAll('#mt-exits .exit-cell.on')].map(c=>c.dataset.v);
+      if(!line||!name){toast('请完善');return;}
+      m.line=line; m.name=name; m.exits=exits; store.setPlan(p); store.addLog(p.id,db.currentUser,`编辑地铁站「${line} ${name}」`); modal.closeTop(); detail.renderBody();
+    },
     del(id){ const p=store.plan(detail.planId); const i=p.metros.findIndex(m=>m.id===id); if(i<0)return; const m=p.metros[i]; if(!perm.canDeleteItem(p,m)){toast('仅创建人可删除');return;} p.metros.splice(i,1); store.setPlan(p); store.addLog(p.id,db.currentUser,`删除地铁站「${m.line} ${m.name}」`); detail.renderBody(); },
     view(m){ const p=store.plan(detail.planId); const relA=p.attractions.filter(a=>a.line===m.line&&a.station===m.name); const relP=p.photos.filter(ph=>ph.line===m.line&&ph.station===m.name); const relG=p.gifts.filter(g=>g.line===m.line&&g.station===m.name); modal.open(`<div class="modal-head">${m.line} ${m.name}</div><div class="modal-body"><div class="muted">出口：${m.exits.join(',')||'无'}</div><div style="margin-top:10px;font-weight:600;">关联景点</div>${relA.length?relA.map(a=>`<div class="list-item">${a.name}</div>`).join(''):'<div class="muted">无</div>'}<div style="margin-top:10px;font-weight:600;">关联拍照姿势</div>${relP.length?relP.map(x=>`<div class="list-item">${x.name}</div>`).join(''):'<div class="muted">无</div>'}<div style="margin-top:10px;font-weight:600;">关联手信</div>${relG.length?relG.map(x=>`<div class="list-item">${x.name}</div>`).join(''):'<div class="muted">无</div>'}</div><div class="modal-foot"><button class="btn btn-primary btn-block" onclick="modal.closeTop()">关闭</button></div>`); }
   };
