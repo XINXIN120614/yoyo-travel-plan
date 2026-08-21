@@ -237,7 +237,7 @@
         <div class="field"><label>目的地</label><div class="select" id="np-dest" onclick="picker.openDest('np-dest')">请选择目的地</div></div>
         <div class="field"><label>往返日期</label><div class="picker"><div class="select" id="np-start" onclick="picker.openDate('np-start')">开始日期</div><div class="select" id="np-end" onclick="picker.openDate('np-end')">结束日期</div></div></div>
         <div class="field" id="np-days" style="display:none;"></div>
-        <div class="field"><label>计划封面（1:1 正方形居中裁剪，上传后不可删除替换）</label><div class="img-upload" id="np-cover" onclick="upload.open('np-cover',{square:true})"><span>上传封面</span></div></div>
+        <div class="field"><label>计划封面（自动等比压缩，显示时居中裁剪）</label><div class="img-upload" id="np-cover" onclick="upload.open('np-cover',{square:true})"><span>上传封面</span></div></div>
         <button class="btn btn-primary btn-block" id="np-create">创建计划</button>
       </div>
     </div>
@@ -616,7 +616,7 @@
     },
     cur(){ return db.users[db.currentUser]; },
     plan(id){ return db.plans[id]; },
-    setPlan(p){ db.plans[p.id]=p; store.save(); },
+    setPlan(p){ db.plans[p.id]=p; store.save(); if(p.shareCode&&Date.now()<p.shareExpiry)share.syncShared(p); },
     addLog(planId,userId,detail){
       if(!db.logs[planId])db.logs[planId]=[];
       const u=db.users[userId];
@@ -825,14 +825,13 @@
       reader.onload=()=>{
         const img=new Image();
         img.onload=()=>{
-          let w=img.width,h=img.height;
-          const scale=Math.min(1,maxDim/Math.max(w,h));
-          w=Math.round(w*scale); h=Math.round(h*scale);
-          if(opts.square){ w=h=Math.min(w,h); }
+          // 等比缩放：长边不超过 maxDim，小图保持原尺寸不放大；绝不裁剪
+          const scale=Math.min(1,maxDim/Math.max(img.width,img.height));
+          const w=Math.max(1,Math.round(img.width*scale));
+          const h=Math.max(1,Math.round(img.height*scale));
           const c=document.createElement('canvas'); c.width=w; c.height=h;
           const ctx=c.getContext('2d');
-          if(opts.square){ ctx.drawImage(img,(img.width-w)/2*0,(img.height-h)/2*0,w,h,0,0,w,h); }
-          else ctx.drawImage(img,0,0,w,h);
+          ctx.drawImage(img,0,0,w,h);
           let out=null;
           try{ out=c.toDataURL('image/jpeg',0.8); }catch(e){ out=reader.result; }
           cb(out);
@@ -1729,6 +1728,8 @@
 
   /* ============ 分享 ============ */
   const share={
+    _syncTimers:{},
+    syncShared(p){ const id=p.id; clearTimeout(this._syncTimers[id]); this._syncTimers[id]=setTimeout(()=>{ delete this._syncTimers[id]; this.pushShared(p); },500); },
     async pushShared(p){
       if(!sb)return;
       try{
@@ -1788,8 +1789,11 @@
     async join(){
       const code=$('#join-code').value.trim().toUpperCase(); if(!code){toast('请输入分享码');return;}
       const btn=$('#modal-stack .btn-primary'); if(btn)btn.disabled=true;
-      let p=Object.values(db.plans).find(x=>x.shareCode===code&&Date.now()<x.shareExpiry);
-      if(!p){ const shared=await share.pullShared(code); if(shared&&shared.id){ p=shared; p.id=p.id||uid(); } }
+      let p=null;
+      const local=Object.values(db.plans).find(x=>x.shareCode===code&&Date.now()<x.shareExpiry);
+      const shared=await share.pullShared(code);
+      if(shared&&shared.id){ p=shared; p.id=p.id||uid(); }
+      else if(local){ p=local; }
       if(!p){ toast('分享码无效或已过期（24小时有效）'); if(btn)btn.disabled=false; return; }
       if(!p.members||!Array.isArray(p.members))p.members=[];
       if(!p.members.includes(db.currentUser))p.members.push(db.currentUser);
@@ -2004,7 +2008,7 @@
     attachDetailSwipe();
     // URL 分享码自动唤起加入
     const h=location.hash.match(/join=([^&]+)/);
-    if(h){ const code=h[1].toUpperCase(); (async()=>{ let p=Object.values(db.plans).find(x=>x.shareCode===code&&Date.now()<x.shareExpiry); if(!p)p=await share.pullShared(code); if(p){ if(db.currentUser){ if(!p.members||!Array.isArray(p.members))p.members=[]; if(!p.members.includes(db.currentUser))p.members.push(db.currentUser); store.setPlan(p); router.go('detail',{planId:p.id}); } else { toast('请先登录后加入协作'); } } })(); }
+    if(h){ const code=h[1].toUpperCase(); (async()=>{ let p=null; const local=Object.values(db.plans).find(x=>x.shareCode===code&&Date.now()<x.shareExpiry); const shared=await share.pullShared(code); if(shared&&shared.id){ p=shared; p.id=p.id||uid(); } else if(local){ p=local; } if(p){ if(db.currentUser){ if(!p.members||!Array.isArray(p.members))p.members=[]; if(!p.members.includes(db.currentUser))p.members.push(db.currentUser); store.setPlan(p); router.go('detail',{planId:p.id}); } else { toast('请先登录后加入协作'); } } })(); }
   });
   </script>
 </body>
